@@ -1,0 +1,109 @@
+import streamlit as st
+import re
+from collections import defaultdict
+
+st.title("ココフォリアログ解析（CoC7版）")
+
+log = st.text_area("ココフォリアログを貼り付け")
+
+if st.button("解析"):
+
+    results = defaultdict(lambda:{
+        "クリティカル":0,
+        "イクストリーム成功":0,
+        "ハード成功":0,
+        "レギュラー成功":0,
+        "失敗":0,
+        "ファンブル":0,
+        "total":0
+    })
+
+    skills = defaultdict(int)
+
+    lowest_roll = {}
+    highest_roll = {}
+
+    total_dice = 0
+
+    lines = log.split("\n")
+
+    for line in lines:
+
+        name_match = re.match(r"(.*?):", line)
+        skill_match = re.search(r"【(.*?)】", line)
+        dice_match = re.search(r"＞\s*(\d+)\s*＞", line)
+
+        if not name_match:
+            continue
+
+        name = name_match.group(1)
+
+        if skill_match:
+            skill = skill_match.group(1)
+            skills[skill] += 1
+
+        if dice_match:
+
+            roll = int(dice_match.group(1))
+            total_dice += 1
+
+            if name not in lowest_roll:
+                lowest_roll[name] = roll
+                highest_roll[name] = roll
+            else:
+                lowest_roll[name] = min(lowest_roll[name], roll)
+                highest_roll[name] = max(highest_roll[name], roll)
+
+        if "クリティカル" in line:
+            results[name]["クリティカル"] += 1
+        elif "イクストリーム成功" in line:
+            results[name]["イクストリーム成功"] += 1
+        elif "ハード成功" in line:
+            results[name]["ハード成功"] += 1
+        elif "レギュラー成功" in line:
+            results[name]["レギュラー成功"] += 1
+        elif "ファンブル" in line:
+            results[name]["ファンブル"] += 1
+        elif "失敗" in line:
+            results[name]["失敗"] += 1
+
+        results[name]["total"] += 1
+
+    st.header("総ダイス数")
+    st.write(total_dice)
+
+    st.header("キャラクター別結果")
+
+    success_rates = []
+
+    for name,data in results.items():
+
+        success = (
+            data["クリティカル"]
+            + data["イクストリーム成功"]
+            + data["ハード成功"]
+            + data["レギュラー成功"]
+        )
+
+        total = data["total"]
+
+        rate = (success/total*100) if total > 0 else 0
+
+        success_rates.append((name,rate))
+
+        st.subheader(name)
+        st.write(data)
+        st.write("最低ダイス:", lowest_roll.get(name))
+        st.write("最大ダイス:", highest_roll.get(name))
+
+    st.header("技能別ダイス回数")
+
+    for skill,count in skills.items():
+        st.write(skill,count)
+
+    st.header("成功率ランキング")
+
+    ranking = sorted(success_rates,key=lambda x:x[1],reverse=True)
+
+    for i,(name,rate) in enumerate(ranking,1):
+        st.write(f"{i}位 {name} : {rate:.1f}%")
